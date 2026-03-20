@@ -1,4 +1,3 @@
-import struct
 import time
 
 import numpy as np
@@ -22,25 +21,15 @@ class ROSPublisher:
 
         self.image_publisher = node.create_publisher(Image, "/annotated_image", 10)
         self.fs_image_publisher = node.create_publisher(Image, "/fastsam_image", 10)
-        self.fs_image_after_publisher = node.create_publisher(
-            Image, "/fastsam_image_after", 10
-        )
+        self.fs_image_after_publisher = node.create_publisher(Image, "/fastsam_image_after", 10)
 
         self.pose_publisher = node.create_publisher(Odometry, "/odom", 10)
 
-        self.local_rgb_publisher = node.create_publisher(
-            PointCloud2, "/local_map/rgb", 10
-        )
-        self.local_sem_publisher = node.create_publisher(
-            PointCloud2, "/local_map/semantic", 10
-        )
+        self.local_rgb_publisher = node.create_publisher(PointCloud2, "/local_map/rgb", 10)
+        self.local_sem_publisher = node.create_publisher(PointCloud2, "/local_map/semantic", 10)
 
-        self.global_rgb_publisher = node.create_publisher(
-            PointCloud2, "/global_map/rgb", 10
-        )
-        self.global_sem_publisher = node.create_publisher(
-            PointCloud2, "/global_map/semantic", 10
-        )
+        self.global_rgb_publisher = node.create_publisher(PointCloud2, "/global_map/rgb", 10)
+        self.global_sem_publisher = node.create_publisher(PointCloud2, "/global_map/semantic", 10)
 
     def publish_all(self, dualmap):
         """
@@ -56,9 +45,7 @@ class ROSPublisher:
             # 2. Publish images
             self._publish_image(dualmap.detector.annotated_image, "annotated")
             self._publish_image(dualmap.detector.annotated_image_fs, "fastsam")
-            self._publish_image(
-                dualmap.detector.annotated_image_fs_after, "fastsam_after"
-            )
+            self._publish_image(dualmap.detector.annotated_image_fs_after, "fastsam_after")
 
             # 3. Publish pose
             self._publish_pose(dualmap.curr_pose)
@@ -67,15 +54,13 @@ class ROSPublisher:
             if len(dualmap.local_map_manager.local_map):
                 start_time = time.time()
                 self._publish_local_map(
-                    dualmap.local_map_manager, dualmap.visualizer, publish_rgb=False
+                    dualmap.local_map_manager, dualmap.visualizer, publish_rgb=True
                 )
-                print(
-                    f"Publishing local map took {time.time() - start_time:.2f} seconds."
-                )
+                print(f"Publishing local map took {time.time() - start_time:.2f} seconds.")
 
             if len(dualmap.global_map_manager.global_map):
                 self._publish_global_map(
-                    dualmap.global_map_manager, dualmap.visualizer, publish_rgb=False
+                    dualmap.global_map_manager, dualmap.visualizer, publish_rgb=True
                 )
 
     def _publish_path(self, path, path_type):
@@ -162,9 +147,7 @@ class ROSPublisher:
             obj_name = visualizer.obj_classes.get_classes_arr()[local_obj.class_id]
             positions = np.asarray(local_obj.pcd.points)
             colors = (np.asarray(local_obj.pcd.colors) * 255).astype(np.uint8)
-            curr_obj_color = (
-                np.array(visualizer.obj_classes.get_class_color(obj_name)) * 255
-            )
+            curr_obj_color = np.array(visualizer.obj_classes.get_class_color(obj_name)) * 255
             curr_obj_color = curr_obj_color.astype(np.uint8)
             semantic_colors = np.tile(curr_obj_color, (positions.shape[0], 1))
 
@@ -180,9 +163,7 @@ class ROSPublisher:
         all_semantic_colors = np.vstack(all_semantic_colors)
 
         if publish_rgb:
-            self.publish_pointcloud(
-                all_positions, all_rgb_colors, self.local_rgb_publisher, "map"
-            )
+            self.publish_pointcloud(all_positions, all_rgb_colors, self.local_rgb_publisher, "map")
 
         self.publish_pointcloud(
             all_positions, all_semantic_colors, self.local_sem_publisher, "map"
@@ -197,9 +178,7 @@ class ROSPublisher:
             obj_name = visualizer.obj_classes.get_classes_arr()[global_obj.class_id]
             positions = np.asarray(global_obj.pcd_2d.points)
             colors = (np.asarray(global_obj.pcd_2d.colors) * 255).astype(np.uint8)
-            curr_obj_color = (
-                np.array(visualizer.obj_classes.get_class_color(obj_name)) * 255
-            )
+            curr_obj_color = np.array(visualizer.obj_classes.get_class_color(obj_name)) * 255
             curr_obj_color = curr_obj_color.astype(np.uint8)
             semantic_colors = np.tile(curr_obj_color, (positions.shape[0], 1))
 
