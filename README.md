@@ -1,13 +1,13 @@
 # DualMap
+
 <h3>
   <a href="https://eku127.github.io/DualMap/">Project Page</a> |
-  <a href="https://arxiv.org/abs/2506.01950">arXiv</a> 
+  <a href="https://arxiv.org/abs/2506.01950">arXiv</a>
 </h3>
 
 <p align="center">
   <img src="resources/image/optimized-gif.gif" width="70%">
 </p>
-
 
 **DualMap** is an online open-vocabulary mapping system that enables robots to understand and navigate dynamic 3D environments using natural language.
 
@@ -29,24 +29,29 @@ The system supports multiple input sources, including offline datasets (**Datase
 git clone --branch main --single-branch --recurse-submodules git@github.com:Eku127/DualMap.git
 cd DualMap
 ```
->  Make sure to use `--recurse-submodules` to get `mobileclip`.
+
+> Make sure to use `--recurse-submodules` to get `mobileclip`.
 
 ### 2. Create Conda Environment
+
 ```bash
 conda env create -f environment.yml
 conda activate dualmap
 ```
 
 ### 3. Install MobileCLIP
+
 ```bash
 cd 3rdparty/mobileclip
 pip install -e . --no-deps
 cd ../..
 ```
+
 > The system currently defaults to `MobileCLIP-v1`, and all reported results are based on `v1`.
 > Since August 2025, `MobileCLIP-v2` has been released, and the system also supports `v2`. You can set up the `v2` environment by following the instructions in [Apple’s MobileCLIP repository](https://github.com/apple/ml-mobileclip).
 
 ### 4. (Optional) Setup ROS 2 Environment
+
 Setting up ROS2 environment for ROS support and applications.
 We recommend [ROS 2 Humble](https://docs.ros.org/en/humble/Installation.html).
 Once installed, activate the environment:
@@ -65,7 +70,6 @@ source /opt/ros/humble/setup.bash
 
 > For the best DualMap experience (especially interactive mapping and navigation), **we strongly recommend setting up the Habitat Data Collector**. See [the repo](https://github.com/Eku127/habitat-data-collector) for installation and usage details.
 
-
 ## Applications
 
 Here's a quick overview of the requirements for each application type:
@@ -75,12 +79,14 @@ Here's a quick overview of the requirements for each application type:
 | Datasets / Query / iPhone | ✓ | | | |
 | ROS (Offline/Online) | ✓ | ✓ | ✓ | |
 | Online Sim (Mapping+Nav) | ✓ | | ✓ | ✓ |
+
 * **ROS**: Please install either ROS1 or ROS2 based on your needs.
 * **Habitat Data Collector**: Currently, it only supports ROS2.
 
 ### 💾 Run with Datasets
 
 DualMap supports running with **offline datasets**. Currently supported datasets include:
+
 1. Replica Dataset  
 2. ScanNet Dataset  
 3. TUM RGB-D Dataset  
@@ -115,12 +121,12 @@ We provide two prebuilt map examples for offline querying: one from iPhone data 
 Follow the [Offline Query Guide](resources/doc/app_offline_query.md) to run the query application.
 
 ### 🖼️ Visualization
+
 <p align="center">
     <img src="resources/image/app_visual.jpg" width="100%">
 </p>
 
 The system supports both [Rerun](https://rerun.io) and [Rviz](http://wiki.ros.org/rviz) visualization. When running with ROS, you can switch the visualizaiton via `use_rerun` and `use_rviz` option in `config/runner_ros.yaml`
-
 
 ## Citation
 
@@ -140,6 +146,7 @@ If you find our work helpful, please consider starring this repo 🌟 and cite:
 ```
 
 ## Contact
+
 For technical questions, please create an issue. For other questions, please contact the first author: jjiang127 [at] connect.hkust-gz.edu.cn
 
 ## Acknowledgment

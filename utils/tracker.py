@@ -159,8 +159,11 @@ class Tracker:
                 pcd_map = self.ref_map[idx_a].pcd
                 pcd_curr = self.curr_frame[idx_b].pcd
 
+                tracking_radius = getattr(
+                    self.cfg, "tracking_radius", self.cfg.downsample_voxel_size * 5
+                )
                 overlap_matrix[idx_a, idx_b] = self.find_overlapping_ratio_faiss(
-                    pcd_map, pcd_curr, radius=0.02
+                    pcd_map, pcd_curr, radius=tracking_radius
                 )
 
         return overlap_matrix
@@ -210,6 +213,13 @@ class Tracker:
 
         counter = 0
 
+        # Use tracking_radius for matching to account for stereo depth noise
+        # (depth noise is ~10 cm at 3 m, ~30 cm at 5 m for compact stereo cameras).
+        # This must be larger than downsample_voxel_size to avoid spurious failures.
+        tracking_radius = getattr(
+            self.cfg, "tracking_radius", self.cfg.downsample_voxel_size * 5
+        )
+
         # compute the overlap info using pcd
         for idx_a in range(len_map):
             for idx_b in range(len_curr):
@@ -219,7 +229,7 @@ class Tracker:
                     continue
 
                 D, I = indices_map[idx_a].search(points_curr[idx_b], 1)
-                overlap = (D < self.cfg.downsample_voxel_size**2).sum()
+                overlap = (D < tracking_radius**2).sum()
                 # calculate the ratio of points within the threshold distance
                 denom = len(points_curr[idx_b])
                 if denom == 0:
