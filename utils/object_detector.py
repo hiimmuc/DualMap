@@ -1,7 +1,6 @@
 import gzip
 import logging
 import os
-import pdb
 import pickle
 import threading
 import time
@@ -54,14 +53,11 @@ class PoseLowPassFilter:
         else:
             # translation filtering
             self.smoothed_translation = (
-                self.alpha * self.smoothed_translation
-                + (1 - self.alpha) * curr_translation
+                self.alpha * self.smoothed_translation + (1 - self.alpha) * curr_translation
             )
 
             # rotation using slerp
-            slerp = Slerp(
-                [0, 1], R.concatenate([self.smoothed_rotation, curr_rotation])
-            )
+            slerp = Slerp([0, 1], R.concatenate([self.smoothed_rotation, curr_rotation]))
             self.smoothed_rotation = slerp(1 - self.alpha)
 
         T_smooth = np.eye(4)
@@ -134,13 +130,11 @@ class Detector:
         self.layout_num = 0
         self.layout_time = 0.0
         # For thread processing
-        self.layout_lock = (
-            threading.Lock()
-        )  # Thread lock for protecting layout_pointcloud
+        self.layout_lock = threading.Lock()  # Thread lock for protecting layout_pointcloud
         self.data_thread = None  # Thread handle
         self.data_event = threading.Event()  # Thread notification event
 
-        logger.info(f"[Detector][Init] Initilizating detection modules...")
+        logger.info("[Detector][Init] Initilizating detection modules...")
 
         if cfg.run_detection:
             try:
@@ -149,10 +143,8 @@ class Detector:
                     f"[Detector][Init] Loading CLIP model: {cfg.clip.model_name} with pretrained weights '{cfg.clip.pretrained}'"
                 )
 
-                self.clip_model, _, self.clip_preprocess = (
-                    open_clip.create_model_and_transforms(
-                        cfg.clip.model_name, pretrained=cfg.clip.pretrained
-                    )
+                self.clip_model, _, self.clip_preprocess = open_clip.create_model_and_transforms(
+                    cfg.clip.model_name, pretrained=cfg.clip.pretrained
                 )
                 self.clip_model = self.clip_model.to(cfg.device)
                 self.clip_model.eval()
@@ -170,9 +162,7 @@ class Detector:
 
             try:
                 # Detection module
-                logger.info(
-                    f"[Detector][Init] Loading YOLO model from\t{cfg.yolo.model_path}"
-                )
+                logger.info(f"[Detector][Init] Loading YOLO model from\t{cfg.yolo.model_path}")
                 self.yolo = YOLO(cfg.yolo.model_path)
                 self.yolo.set_classes(self.obj_classes.get_classes_arr())
             except Exception as e:
@@ -181,9 +171,7 @@ class Detector:
 
             try:
                 # Segmentation module
-                logger.info(
-                    f"[Detector][Init] Loading SAM model from\t{cfg.sam.model_path}"
-                )
+                logger.info(f"[Detector][Init] Loading SAM model from\t{cfg.sam.model_path}")
                 self.sam = SAM(cfg.sam.model_path)
             except Exception as e:
                 logger.error(f"[Detector][Init] Error loading SAM model: {e}")
@@ -229,9 +217,7 @@ class Detector:
             # Used for unknown class
             if cfg.use_avg_feat_for_unknown:
                 class_feats_mean = np.mean(class_feats, axis=0)
-                self.class_feats_mean = class_feats_mean / np.linalg.norm(
-                    class_feats_mean
-                )
+                self.class_feats_mean = class_feats_mean / np.linalg.norm(class_feats_mean)
 
             with timing_context("Detection Filter", self):
                 self.filter = Filter(
@@ -244,7 +230,7 @@ class Detector:
         # for filtering the pose of follower camera for visualization
         self.pose_filter_follower = PoseLowPassFilter(alpha=0.95)
 
-        logger.info(f"[Detector][Init] Finish Init.")
+        logger.info("[Detector][Init] Finish Init.")
 
     def update_state(self) -> None:
         self.curr_results = {}
@@ -320,9 +306,7 @@ class Detector:
             layout_time = end_time - start_time
             self.layout_time += layout_time
             self.layout_num += 1
-            logger.info(
-                f"[Detector][Layout] Layout update took {layout_time:.4f} seconds."
-            )
+            logger.info(f"[Detector][Layout] Layout update took {layout_time:.4f} seconds.")
 
     def get_layout_pointcloud(self):
         """
@@ -332,12 +316,23 @@ class Detector:
             return self.layout_pointcloud
 
     def save_layout(self):
-        if self.layout_pointcloud is not None:
-            layout_pcd = self.get_layout_pointcloud()
-            save_dir = self.cfg.map_save_path
-            layout_pcd_path = save_dir + "/layout.pcd"
-            o3d.io.write_point_cloud(layout_pcd_path, layout_pcd)
-            logger.info(f"[Detector][Layout] Saving layout to: {layout_pcd_path}")
+        # Wait for any in-progress background layout-update thread to finish
+        # before reading the point cloud, to avoid a race condition.
+        if self.data_thread and self.data_thread.is_alive():
+            logger.info("[Detector][Layout] Waiting for layout thread to finish before saving...")
+            self.data_thread.join()
+
+        layout_pcd = self.get_layout_pointcloud()
+        if layout_pcd is None or len(layout_pcd.points) == 0:
+            logger.warning("[Detector][Layout] Layout point cloud is empty — skipping save.")
+            return
+
+        save_dir = self.cfg.map_save_path
+        layout_pcd_path = save_dir + "/layout.pcd"
+        o3d.io.write_point_cloud(layout_pcd_path, layout_pcd)
+        logger.info(
+            f"[Detector][Layout] Saving layout to: {layout_pcd_path} ({len(layout_pcd.points)} points)"
+        )
 
     def load_layout(self):
         """
@@ -359,9 +354,7 @@ class Detector:
 
         # Check if layout point cloud file exists
         if not Path(layout_pcd_path).is_file():
-            logger.info(
-                f"[Detector][Layout] Layout file not found at: {layout_pcd_path}"
-            )
+            logger.info(f"[Detector][Layout] Layout file not found at: {layout_pcd_path}")
             return None
 
         # Load layout point cloud
@@ -459,18 +452,14 @@ class Detector:
             masks_tensor = results[0].masks.data
             masks_np = masks_tensor.cpu().numpy().astype(bool)
         else:
-            logging.warning(
-                "[Detector] fastSAM did not return any masks, using empty mask array"
-            )
+            logging.warning("[Detector] fastSAM did not return any masks, using empty mask array")
             # If no mask is returned, create an empty array. Assume mask size matches input image's first two dims
             masks_np = np.empty((0,) + color.shape[:2], dtype=bool)
 
         # Extract class IDs (default all set to unknown_class_id)
         detection_class_id_tensor = results[0].boxes.cls
         detection_class_id_np = detection_class_id_tensor.cpu().numpy().astype(int)
-        detection_class_id_np = np.full_like(
-            detection_class_id_np, self.unknown_class_id
-        )
+        detection_class_id_np = np.full_like(detection_class_id_np, self.unknown_class_id)
 
         return confidence_np, detection_class_id_np, xyxy_np, masks_np
 
@@ -492,9 +481,7 @@ class Detector:
         )
 
         # Merge class_id
-        merged_class_id = np.concatenate(
-            [detections1.class_id, detections2.class_id], axis=0
-        )
+        merged_class_id = np.concatenate([detections1.class_id, detections2.class_id], axis=0)
 
         # Merge mask
         merged_masks = np.concatenate([detections1.mask, detections2.mask], axis=0)
@@ -571,18 +558,10 @@ class Detector:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Convert numpy arrays to torch tensors and move to GPU
-        fs_masks = torch.tensor(
-            fs_detections.mask, dtype=torch.bool, device=device
-        )  # (N1, H, W)
-        fs_xyxy = torch.tensor(
-            fs_detections.xyxy, dtype=torch.float32, device=device
-        )  # (N1, 4)
-        fs_confidence = torch.tensor(
-            fs_detections.confidence, dtype=torch.float32, device=device
-        )
-        fs_class_id = torch.tensor(
-            fs_detections.class_id, dtype=torch.int64, device=device
-        )
+        fs_masks = torch.tensor(fs_detections.mask, dtype=torch.bool, device=device)  # (N1, H, W)
+        fs_xyxy = torch.tensor(fs_detections.xyxy, dtype=torch.float32, device=device)  # (N1, 4)
+        fs_confidence = torch.tensor(fs_detections.confidence, dtype=torch.float32, device=device)
+        fs_class_id = torch.tensor(fs_detections.class_id, dtype=torch.int64, device=device)
 
         curr_masks = torch.tensor(
             curr_detections.mask, dtype=torch.bool, device=device
@@ -635,9 +614,7 @@ class Detector:
 
         return filtered_fs_detections
 
-    def add_extra_detections_from_fastsam(
-        self, color, fastsam_detections, incoming_detections
-    ):
+    def add_extra_detections_from_fastsam(self, color, fastsam_detections, incoming_detections):
 
         with timing_context("mask_filter", self):
             fs_after_detections = self.filter_fs_detections_by_curr(
@@ -651,9 +628,7 @@ class Detector:
             self.annotated_image_fs_after = image_fs_after
 
         # merge_detctions
-        merged_detctions = self.merge_detections(
-            fs_after_detections, incoming_detections
-        )
+        merged_detctions = self.merge_detections(fs_after_detections, incoming_detections)
         return merged_detctions
 
     def process_detections(self):
@@ -663,9 +638,7 @@ class Detector:
         with timing_context("YOLO+Segmentation+FastSAM", self):
             # Run FastSAM
             if self.cfg.use_fastsam:
-                fastsam_thread = threading.Thread(
-                    target=self.process_fastsam, args=(color,)
-                )
+                fastsam_thread = threading.Thread(target=self.process_fastsam, args=(color,))
                 fastsam_thread.start()
 
             # Run YOLO and SAM
@@ -680,9 +653,7 @@ class Detector:
             filtered_detections = self.filter.run_filter()
 
         if self.filter.get_len() == 0:
-            logger.warning(
-                "[Detector] No valid detections in curr frame after filtering."
-            )
+            logger.warning("[Detector] No valid detections in curr frame after filtering.")
             self.curr_results = {}
             return
 
@@ -700,16 +671,14 @@ class Detector:
             cluster_thread.start()
 
             with timing_context("CLIP", self):
-                image_crops, image_feats, text_feats = (
-                    self.compute_clip_features_batched(
-                        color,
-                        filtered_detections,
-                        self.clip_model,
-                        self.clip_tokenizer,
-                        self.clip_preprocess,
-                        self.cfg.device,
-                        self.obj_classes.get_classes_arr(),
-                    )
+                image_crops, image_feats, text_feats = self.compute_clip_features_batched(
+                    color,
+                    filtered_detections,
+                    self.clip_model,
+                    self.clip_tokenizer,
+                    self.clip_preprocess,
+                    self.cfg.device,
+                    self.obj_classes.get_classes_arr(),
                 )
 
             cluster_thread.join()
@@ -752,18 +721,14 @@ class Detector:
 
             # Convert input data to tensors
             depth_tensor = (
-                torch.from_numpy(self.curr_data.depth)
-                .to(self.cfg.device)
-                .float()
-                .squeeze()
+                torch.from_numpy(self.curr_data.depth).to(self.cfg.device).float().squeeze()
             )
             masks_tensor = torch.from_numpy(masks).to(self.cfg.device).float()
             intrinsic_tensor = (
                 torch.from_numpy(self.curr_data.intrinsics).to(self.cfg.device).float()
             )
             image_rgb_tensor = (
-                torch.from_numpy(self.curr_data.color).to(self.cfg.device).float()
-                / 255.0
+                torch.from_numpy(self.curr_data.color).to(self.cfg.device).float() / 255.0
             )
 
             # Generate 3D points and colors for the masks
@@ -859,16 +824,12 @@ class Detector:
         - point_cloud: The point cloud in world coordinates as an Open3D PointCloud object.
         """
         # Extract necessary data from curr_data
-        depth = self.curr_data.depth.squeeze(
-            -1
-        )  # Remove the last dimension if depth is (H, W, 1)
+        depth = self.curr_data.depth.squeeze(-1)  # Remove the last dimension if depth is (H, W, 1)
         intrinsics = self.curr_data.intrinsics
         pose = self.curr_data.pose
 
         # Mask out invalid depth values (e.g., depth = 0 or NaN)
-        valid_mask = (depth > 0) & (
-            depth != np.inf
-        )  # Create a mask for valid depth values
+        valid_mask = (depth > 0) & (depth != np.inf)  # Create a mask for valid depth values
         depth = depth[valid_mask]  # Only keep valid depth values
 
         # Get the corresponding u, v coordinates for valid pixels
@@ -895,9 +856,7 @@ class Detector:
         points_camera = np.vstack((x, y, z)).T
 
         # Convert points to homogeneous coordinates (4D) for transformation
-        points_homogeneous = np.hstack(
-            (points_camera, np.ones((points_camera.shape[0], 1)))
-        )
+        points_homogeneous = np.hstack((points_camera, np.ones((points_camera.shape[0], 1))))
 
         # Apply the pose transformation to move points to world coordinates
         points_world_homogeneous = (pose @ points_homogeneous.T).T
@@ -1050,17 +1009,12 @@ class Detector:
             curr_obs.distance = distance
 
             # judge if low mobility according to the clip feature
-            curr_obs.is_low_mobility = self.is_low_mobility(
-                curr_obs.clip_ft
-            )  # , hl_debug, hl_idx
+            curr_obs.is_low_mobility = self.is_low_mobility(curr_obs.clip_ft)  # , hl_debug, hl_idx
             # for debugging only
             # bbox_hl_mapping.append([self.curr_results['xyxy'][i], hl_debug, hl_idx])
 
             # if curr_obs classid is desk set as low mobility
-            if (
-                self.obj_classes.get_classes_arr()[curr_obs.class_id]
-                in self.cfg.lm_examples
-            ):
+            if self.obj_classes.get_classes_arr()[curr_obs.class_id] in self.cfg.lm_examples:
                 curr_obs.is_low_mobility = True
 
             if self.cfg.save_cropped:
@@ -1071,9 +1025,7 @@ class Detector:
                 cropped_image = whole_image[y1:y2, x1:x2]
                 cropped_mask = curr_obs.mask[y1:y2, x1:x2].astype(np.uint8) * 255
 
-                masked_image = cv2.bitwise_and(
-                    cropped_image, cropped_image, mask=cropped_mask
-                )
+                masked_image = cv2.bitwise_and(cropped_image, cropped_image, mask=cropped_mask)
 
                 curr_obs.masked_image = masked_image
                 curr_obs.cropped_image = cropped_image
@@ -1081,9 +1033,7 @@ class Detector:
             # Add observation to the list
             self.curr_observations.append(curr_obs)
 
-        logger.info(
-            f"[Detector] Current observations num: {len(self.curr_observations)}"
-        )
+        logger.info(f"[Detector] Current observations num: {len(self.curr_observations)}")
 
     def get_weighted_feature(self, idx):
         image_feat = self.curr_results["image_feats"][idx]
@@ -1173,9 +1123,7 @@ class Detector:
         translation = self.curr_data.pose[:3, 3].tolist()
 
         # change the rotation mat to axis-angle
-        axis, angle = self.visualizer.rotation_matrix_to_axis_angle(
-            self.curr_data.pose[:3, :3]
-        )
+        axis, angle = self.visualizer.rotation_matrix_to_axis_angle(self.curr_data.pose[:3, :3])
         self.visualizer.log(
             "world/camera",
             self.visualizer.Transform3D(
@@ -1368,9 +1316,7 @@ class Detector:
         sim = sim.reshape(-1)
 
         sim_lm = np.max(sim[: self.num_examples[0]])
-        sim_hm = np.max(
-            sim[self.num_examples[0] : (self.num_examples[0] + self.num_examples[1])]
-        )
+        sim_hm = np.max(sim[self.num_examples[0] : (self.num_examples[0] + self.num_examples[1])])
         sim_lm_des = np.max(sim[(self.num_examples[0] + self.num_examples[1]) :])
 
         # for debugging only
@@ -1383,7 +1329,7 @@ class Detector:
         # Use configurable thresholds
         similarity_delta = self.cfg.mobility.similarity_delta
         descriptor_threshold = self.cfg.mobility.descriptor_threshold
-        
+
         if sim_lm > sim_hm + similarity_delta:
             res = True
         elif sim_lm + similarity_delta < sim_hm:
@@ -1595,13 +1541,9 @@ class Filter:
         self.set_detections(keep)
 
         if self.get_len() == 0:
-            logger.warning(
-                "[Detector][Filter] After filtering, no detection result remains..."
-            )
+            logger.warning("[Detector][Filter] After filtering, no detection result remains...")
             return None
-        logger.info(
-            f"[Detector][Filter] Filtered {self.get_len()} out of {original_num}"
-        )
+        logger.info(f"[Detector][Filter] Filtered {self.get_len()} out of {original_num}")
 
         # create new detections object and return
         filtered_detections = sv.Detections(
@@ -1717,15 +1659,11 @@ class Filter:
                         ):
                             keep[j] = False
                             self.merge_detections(j, i)
-                            logger.info(
-                                f"[Detector][Filter] Merging {class_j} into {class_i}"
-                            )
+                            logger.info(f"[Detector][Filter] Merging {class_j} into {class_i}")
                         else:
                             keep[i] = False
                             self.merge_detections(i, j)
-                            logger.info(
-                                f"[Detector][Filter] Merging {class_i} into {class_j}"
-                            )
+                            logger.info(f"[Detector][Filter] Merging {class_i} into {class_j}")
 
         logger.info(
             f"[Detector][Filter] Original number of detections: {N}, after proximity filter: {np.sum(keep)}"
@@ -1837,9 +1775,7 @@ def get_text_features(
     ]
 
     # Get all the prompted sequences
-    class_name_prompts = [
-        x.format(lm) for lm in class_names for x in multiple_templates
-    ]
+    class_name_prompts = [x.format(lm) for lm in class_names for x in multiple_templates]
 
     # Get tokens
     text_tokens = clip_tokenizer(class_name_prompts).to(device)
